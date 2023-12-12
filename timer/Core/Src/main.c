@@ -134,22 +134,19 @@ int main(void)
   while (1)
   {
 	  while (!rdy){ __NOP();}
-	  __disable_irq();
+//	  __disable_irq();
 	  memcpy(safe_buf + offset, dma_circular + offset, offsize * sizeof(uint32_t));
-
-	  uint32_t local_offset = offset;
-	  __enable_irq();
 	  uint32_t cum_time = 0;
 	  for(uint16_t i = 0; i < offsize; ++i){
 		  if (i == 0)
-			  cum_time += safe_buf[local_offset+i];
+			  cum_time += safe_buf[offset+i];
 		  else
-			  cum_time += safe_buf[local_offset+i] - safe_buf[local_offset+i - 1];
+			  cum_time += safe_buf[offset+i] - safe_buf[offset+i - 1];
 	  }
-	  //cum_time = (safe_buf[offset+4] - safe_buf[offset]) / 5.0f;
 	  sprintf(msg, "time between 5 presses: %u \r\n", cum_time);
 	  cum_time = 0;
 	  HAL_UART_Transmit(&huart2, msg, strlen(msg), 100);
+//	  __enable_irq();
 	  rdy = false;
     /* USER CODE END WHILE */
 
