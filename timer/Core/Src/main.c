@@ -20,7 +20,6 @@
 #include "main.h"
 #include "i2c.h"
 #include "spi.h"
-#include "tim.h"
 #include "usart.h"
 #include "usb.h"
 #include "gpio.h"
@@ -59,20 +58,23 @@ uint32_t safe_counter = 0;
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
-	if (GPIO_Pin == GPIO_PIN_0){
+//void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
+//	if (GPIO_Pin == GPIO_PIN_0){
 //		HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_8);
-		++counter;
-	}
-}
-
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
-	if (htim == &htim2){
-		safe_counter = counter;
-		counter = 0;
-		rdy = true;
-	}
-}
+//		if (HAL_GPIO_ReadPin(GPIOA, GPIO_Pin) == GPIO_PIN_SET)
+//			++counter;
+//	}
+//}
+////
+//void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
+//	if (htim == &htim2){
+////		__disable_irq();
+//		safe_counter = counter;
+//		counter = 0;
+//		rdy = true;
+////		__enable_irq();
+//	}
+//}
 
 /* USER CODE END PFP */
 
@@ -111,23 +113,52 @@ int main(void)
   MX_I2C1_Init();
   MX_SPI1_Init();
   MX_USB_PCD_Init();
-  MX_TIM2_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_Base_Start_IT(&htim2);
+//  HAL_TIM_Base_Start_IT(&htim2);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  bool prev_state = false;
+  uint32_t cnt = 0;
+  uint32_t angle = 0;
+  float r = 0.1;
+  float speed = 0;
   while (1)
   {
-	  while (!rdy){ __NOP();}
-	  rdy = false;
-	  sprintf(msg, "presses this second: %lu \r\n", safe_counter);
-	  HAL_UART_Transmit_IT(&huart2, (unsigned char*)msg, strlen(msg));
+//	  while (!rdy){
+		  bool state = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_3);
+		  if (state != prev_state){
+			  prev_state = state;
+			  ++counter;
+//			  HAL_UART_Transmit_IT(&huart2, "c", 1);
+		  }
+//	  }
+//	  rdy = false;
+	  if (cnt % 15 == 0) {
+		  angle = counter * 4;
+		  speed = ((3.14 * r) / 180) * angle * 1000 / 15; // m/s
+//		  sprintf(msg, ": %lu \r\n", (int)speed);
+
+		  //HAL_UART_Transmit_IT(&huart2, (unsigned char*)msg, strlen(msg)); // to can
+		  counter = 0;
+	  }
+	  if (cnt % 1000 == 0) {
+		  sprintf(msg, "presses this second: %.2f\r\n", speed);
+
+		  HAL_UART_Transmit_IT(&huart2, (unsigned char*)msg, strlen(msg));
+
+	  }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
+	  HAL_Delay(1);
+	  cnt++;
+	  if (10000 == cnt) {
+		  cnt = 0;
+	  }
   }
   /* USER CODE END 3 */
 }
