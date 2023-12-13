@@ -18,7 +18,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "dma.h"
 #include "i2c.h"
 #include "spi.h"
 #include "tim.h"
@@ -28,7 +27,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "string.h"
 #include "stdbool.h"
+#include "stdio.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -38,7 +39,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define frequency 48000000UL
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -49,42 +49,35 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-const uint16_t offsize = 5;
+volatile uint32_t counter = 0;
 volatile bool rdy = false;
-volatile uint16_t offset = 0;
-volatile uint32_t dma_circular[10];
-volatile uint32_t safe_buf[10];
-volatile bool circular_tracker[10];
-unsigned char msg[100];
+char msg[100];
+uint32_t safe_counter = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 
-void HAL_TIM_IC_CaptureHalfCpltCallback(TIM_HandleTypeDef *htim)
-{
-	  if (htim == &htim2){
-		  offset = 0;
-		  rdy = true;
-		  TIM2->CNT = 0;
-//		  HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_8);
-	  }
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
+	if (GPIO_Pin == GPIO_PIN_0){
+//		HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_8);
+		++counter;
+	}
 }
-void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
-	  if (htim == &htim2){
-		  offset = offsize;
-		  rdy = true;
-		  TIM2->CNT = 0;
-//		  HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_9);
-	  }
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
+	if (htim == &htim2){
+		safe_counter = counter;
+		counter = 0;
+		rdy = true;
+	}
 }
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
 /* USER CODE END 0 */
 
 /**
@@ -115,16 +108,13 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
   MX_I2C1_Init();
   MX_SPI1_Init();
   MX_USB_PCD_Init();
   MX_TIM2_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_IC_Start_DMA(&htim2, TIM_CHANNEL_1, dma_circular, offsize * 2);
-
-
+  HAL_TIM_Base_Start_IT(&htim2);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -132,15 +122,9 @@ int main(void)
   while (1)
   {
 	  while (!rdy){ __NOP();}
-	  memcpy(safe_buf + offset, dma_circular + offset, offsize);
-	  uint32_t cum_time = 0;
-	  for(uint16_t i = 0; i < offsize; ++i){
-		  cum_time += safe_buf[offset+i];
-	  }
-	  sprintf(msg, "time between 5 presses: %u \r\n", cum_time);
-	  cum_time = 0;
-	  HAL_UART_Transmit(&huart2, msg, strlen(msg), 100);
 	  rdy = false;
+	  sprintf(msg, "presses this second: %lu \r\n", safe_counter);
+	  HAL_UART_Transmit_IT(&huart2, (unsigned char*)msg, strlen(msg));
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
