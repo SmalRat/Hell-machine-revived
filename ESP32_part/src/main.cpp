@@ -1,12 +1,20 @@
 #include <esp32-hal-timer.h>
 #include <HardwareSerial.h>
 #include <BluetoothSerial.h>
+#include <CAN.h>
 
+void receive_CAN_speed_set(uint8_t* msg);
+void receive_CAN_angle_set(uint8_t* msg);
+void parse_CAN();
 
 BluetoothSerial bluetooth_module;
 // Utility constants - start
+constexpr int CAN_RX = 22; // to can TX
+constexpr int CAN_TX = 21; // to can RX
+constexpr int CAN_BAUD = 1E6; 
 constexpr size_t CHAR_MIN_SIZE = 0;
 constexpr size_t CHAR_MAX_SIZE = 255;
+uint16_t prev_distance = 0;
 
 constexpr int MASTER_DEVICE_BAUDRATE = 115200;
 
@@ -17,7 +25,6 @@ constexpr int MASTER_DEVICE_BAUDRATE = 115200;
 /*
 Constants responsible for engine speed and direction control pins - start
 */
-
 constexpr int ENGINE1_BRAKE_PIN = 26;
 constexpr int ENGINE2_BRAKE_PIN = 27;
 constexpr int ENGINE3_BRAKE_PIN = 32;
@@ -231,7 +238,8 @@ void setup() {
   SPEED_MAP_TO_COMMAND['8'] = 8;
   SPEED_MAP_TO_COMMAND['9'] = 9;
   SPEED_MAP_TO_COMMAND['q'] = 10;
-  
+  CAN.setPins(CAN_RX,CAN_TX);
+  CAN.begin(CAN_BAUD);
   // Speed measurement setup - start
   
   
@@ -521,5 +529,62 @@ void loop() {
     stop();
     Serial.print("Connection has been lost!\n");
     delay(3000);
+  }
+}
+
+
+constexpr uint16_t SPEEDID = 0x105;
+constexpr uint16_t ROTATIONID = 0x106;
+void parse_CAN(){
+  if (!CAN.parsePacket()) {return;}
+  uint8_t i = 0;
+  uint8_t data[8];
+  while(data[i++] = CAN.read());
+  switch (CAN.packetId())
+  {
+  case SPEEDID:
+      receive_CAN_speed_set(data);
+      break;
+  case ROTATIONID:  
+      receive_CAN_angle_set(data);
+      break;
+  default:
+    break;
+  }
+}
+
+void receive_CAN_speed_set(uint8_t* data){
+  uint16_t distance = (data[1] << 8) + data[2];
+  if (distance < prev_distance){
+    current_motor_speed += 2;
+  } 
+  else if (distance > prev_distance){
+    current_motor_speed -= 2;
+  }
+  prev_distance = distance;
+}
+
+
+constexpr uint8_t LEFT = 0x00;
+constexpr uint8_t RIGHT = 0xFF;
+constexpr uint8_t NODATA = 69;
+void receive_CAN_angle_set(uint8_t* data){
+  switch (data[0])
+  {
+  case LEFT:
+    turn_left();
+    delay(data[1]);
+    no_turn();
+    break;
+  case RIGHT:
+    turn_right();
+    delay(data[1]);
+    no_turn();
+    break;
+  case NODATA:
+    no_turn();
+    break;
+  default:
+    break;
   }
 }
